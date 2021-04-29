@@ -4,6 +4,8 @@ using GHIElectronics.TinyCLR.Pins;
 using System;
 using System.Diagnostics;
 using System.Net;
+using System.Threading;
+using GHIElectronics.TinyCLR.Drivers.Microchip.Enc28J60;
 
 namespace NetworkTest
 {
@@ -25,6 +27,8 @@ namespace NetworkTest
 
         public NetworkDelegate OnLinkChanged;
         public byte[] DeviceIP { get; set; }
+
+        private Thread WatchENCThread;
 
         public Network(string ip, string subnetmask, string gateway, string dns, byte[] mac, int chipSelect = SC20100.GpioPin.PB8, int ethReset = SC20100.GpioPin.PB9, int ethInterrupt = SC20100.GpioPin.PD6, string spi = SC20260.SpiBus.Spi3)
         {
@@ -90,6 +94,22 @@ namespace NetworkTest
             networkController.NetworkLinkConnectedChanged += NetworkController_NetworkLinkConnectedChanged;
 
             networkController.Enable();
+
+            WatchENCThread = new Thread(WatchENC);
+            WatchENCThread.Start();
+        }
+
+        private void WatchENC()
+        {
+            while (true)
+            {
+                if (Enc28J60Interface.TransmitErrorCounter() > 0 || Enc28J60Interface.ReceiveErrorCounter() > 0)
+                {
+                    Debug.WriteLine("Resetting ENC!");
+                    Enc28J60Interface.SoftReset();
+                }
+                Thread.Sleep(1000);
+            }
         }
 
         private void NetworkController_NetworkLinkConnectedChanged(NetworkController sender, NetworkLinkConnectedChangedEventArgs e)
